@@ -1,0 +1,87 @@
+---
+title: "Weight Lifting Exercise Prediction"
+author: "Yolife Arvelo"
+date: "June 21, 2015"
+output: html_document
+---
+
+```{r loadggplot, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+library(ggplot2)
+library(grid)
+library(caret)
+library(xtable)
+options(xtable.comment = FALSE)
+```
+## Summary
+Human activity recognition research has traditionally focused on discriminating between different activities, i.e. to predict "which" activity was performed at a specific point in time (like with the Daily Living Activities dataset). There is another approach which is to investigate "how (well)" an activity was performed by the wearer.
+
+The Weight Lifting Exercises Dataset contains data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform Unilateral Dumbbell Biceps Curl correctly and incorrectly in 5 different ways: exactly according to the specification (Class A), throwing
+the elbows to the front (Class B), lifting the dumbbell
+only halfway (Class C), lowering the dumbbell only halfway
+(Class D) and throwing the hips to the front (Class E). 
+Read more: http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises#ixzz3diUlFUul
+
+The goal of this project is to predict the manner in which the participants did the exercise.
+
+##The data
+The data for training was downloaded from: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+```{r}
+wle <- read.csv('pml-training.csv')
+dim(wle)
+```
+
+It contains 19622 observations with 160 variables. Given that it's a large dataset, the training set was split in 60% for training and 40% for validation of the model. 
+
+##Picking variables
+We removed the following variables of the dataset because they aren't useful for prediction purposes:
+
+-X: sequence of the record in the dataset.
+-user_name: the name of the participant.
+-raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp: date and time -when the excersise was perfomed. 
+-new_window, num_window: exercise window.
+
+The following were also removed:
+-Variables that had more than 50% of NA values
+-Variables that had very little variability (as identified by the $nearZeroVar$ function in R).
+
+```{r}
+temp <- wle[,seq(-1,-8)]
+keepcols <- colMeans(is.na(temp)) < .50
+temp <- temp[, keepcols]
+nsvt <- nearZeroVar(temp, saveMetrics=TRUE)
+cleanwle <- temp[,!nsvt$nzv]
+dim(cleanwle)
+```
+
+## Building the model
+After removing unnecessary variables, the dataset still has 51 covariates, therefore it can be difficult to compare them to choose the right predictors. That's why I tested several models that choose the variables inside the same algorithm like trees and random forests. 
+
+In the end, the best model for prediction of this data was random forest. The results are presented in the next section. 
+```{r}
+inTrain <- createDataPartition(y=cleanwle$classe,p=0.6, list=FALSE)
+train = cleanwle[inTrain,]
+set.seed(19191)
+```
+```{r, eval=FALSE}
+fit <- train(train$classe ~ ., method="rf", data=train, prox=TRUE)
+```
+```{r, echo=FALSE}
+load("modFit.RData")
+```
+
+## Results
+The model was tested against the testing dataset (40% of the data).
+```{r}
+test <- cleanwle[-inTrain,]
+pred <- predict(fit, test)
+cm <- confusionMatrix(test$classe, pred)
+```
+The confusion matrix (comparing predicted values with the actual values) is:
+```{r, results='asis'}
+print(xtable(cm$table),type='html')
+```
+
+Over the test dataset, the model had `r round(cm$overall["Accuracy"]*100,2)` which is a very good result. 
+
+## Conclussions
+Random forests is one of most accurate methods for prediction. It worked really well with this dataset, even though it took more than an hour to run.
